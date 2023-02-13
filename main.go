@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"time"
 
@@ -14,14 +15,27 @@ import (
 )
 
 var (
-	trackerAddr = &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 7701}
+	paramTrackerAddr string
+)
+
+var (
+	trackerAddr *net.UDPAddr
 )
 
 var cmdRoot = &cobra.Command{
 	Use: "tt send file",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		addr, err := netip.ParseAddrPort(paramTrackerAddr)
+		if err != nil {
+			return err
+		}
+		trackerAddr = net.UDPAddrFromAddrPort(addr)
+		return err
+	},
 }
 
 func init() {
+	cmdRoot.PersistentFlags().StringVar(&paramTrackerAddr, "tracker", "127.0.0.1:7701", "")
 	cmdRoot.AddCommand(cmdTracker, cmdSend, cmdReceive)
 }
 
@@ -78,7 +92,7 @@ var cmdSend = &cobra.Command{
 }
 
 func cmdRunSend(cmd *cobra.Command, args []string) error {
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{})
 	if err != nil {
 		return err
 	}
@@ -119,6 +133,7 @@ func cmdRunSend(cmd *cobra.Command, args []string) error {
 	}()
 
 	notifyHave := func() {
+		fmt.Printf("ping to tracker %s...\n", trackerAddr)
 		_, err := conn.WriteTo([]byte(fmt.Sprintf("#HAVE %s", id)), trackerAddr)
 		if err != nil {
 			panic(err)
@@ -147,7 +162,7 @@ var cmdReceive = &cobra.Command{
 }
 
 func cmdRunReceive(cmd *cobra.Command, args []string) error {
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{})
 	if err != nil {
 		return err
 	}
